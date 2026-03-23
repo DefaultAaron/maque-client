@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>麻雀OMS — 设置</title>
+    <style>
+        :root {
+            --bg: #0f0f11;
+            --surface: #17171a;
+            --border: #2a2a2f;
+            --accent: #e8c84a;
+            --text: #e8e8ec;
+            --muted: #7a7a85;
+            --danger: #e85a4a;
+            --success: #4ae8a0;
+            --mono: 'Courier New', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            -webkit-font-smoothing: antialiased;
+            -webkit-app-region: drag;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+            -webkit-app-region: no-drag;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .logo-text {
+            font-family: var(--mono);
+            font-size: 1.4rem;
+            color: var(--accent);
+        }
+
+        .logo-sub {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 0.25rem;
+        }
+
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        .step-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+        }
+
+        .step-desc {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin-bottom: 1.2rem;
+            line-height: 1.6;
+        }
+
+        label {
+            display: block;
+            font-size: 0.78rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.35rem;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.9rem;
+            padding: 0.6rem 0.85rem;
+            outline: none;
+            transition: border-color 180ms;
+            font-family: inherit;
+        }
+
+        textarea {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            resize: vertical;
+            min-height: 110px;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .fg {
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.65rem;
+            border-radius: 6px;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 180ms;
+            margin-top: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #0f0f11;
+        }
+
+        .btn-primary:hover {
+            background: #d4b43e;
+        }
+
+        .btn-primary:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            margin-top: .4rem;
+        }
+
+        .btn-ghost:hover {
+            color: var(--text);
+            border-color: var(--muted);
+        }
+
+        .alert {
+            padding: .6rem .85rem;
+            border-radius: 6px;
+            font-size: .82rem;
+            margin-bottom: .75rem;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert.error {
+            background: #2a1010;
+            border: 1px solid var(--danger);
+            color: #f5a0a0;
+        }
+
+        .alert.success {
+            background: #102010;
+            border: 1px solid var(--success);
+            color: #a0f5c0;
+        }
+
+        .alert.info {
+            background: #10202a;
+            border: 1px solid #3a6080;
+            color: #7ab8f5;
+        }
+
+        .alert.warn {
+            background: #2a2010;
+            border: 1px solid #a07030;
+            color: #e8a84a;
+        }
+
+        .spin {
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border: 2px solid rgba(0, 0, 0, .3);
+            border-top-color: #0f0f11;
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: .15rem .5rem;
+            border-radius: 4px;
+            font-size: .72rem;
+            font-family: var(--mono);
+            background: var(--border);
+            color: var(--muted);
+            margin-left: .4rem;
+        }
+
+        .badge.ok {
+            background: #102010;
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .badge.err {
+            background: #2a1010;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="logo">
+            <div class="logo-text">麻雀<span style="color:var(--muted)">/oms</span></div>
+            <div class="logo-sub">Order Management System</div>
+        </div>
+
+        <!-- Step: Agent not running -->
+        <div class="step" id="step-no-agent">
+            <div class="step-title">需要安装VPN代理</div>
+            <div class="step-desc">
+                请联系管理员安装 Maque Agent 服务。<br>
+                安装完成后重新启动此应用。
+            </div>
+            <div class="alert info show">代理服务未运行 (localhost:51821)</div>
+            <button class="btn btn-primary" onclick="init()">重新检测</button>
+        </div>
+
+        <!-- Step: VPN config -->
+        <div class="step" id="step-vpn">
+            <div class="step-title">配置VPN</div>
+            <div class="step-desc">
+                粘贴管理员发送的VPN配置文件内容。<br>
+                配置仅保存在本设备，不会上传服务器。
+            </div>
+            <div id="alert-vpn" class="alert"></div>
+            <div class="fg">
+                <label>VPN 配置内容</label>
+                <textarea id="wg-conf"
+                    placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = ...&#10;&#10;[Peer]&#10;PublicKey = ...&#10;AllowedIPs = ...&#10;Endpoint = ..."></textarea>
+            </div>
+            <button class="btn btn-primary" id="btn-vpn" onclick="saveAndConnect()">保存并连接VPN</button>
+        </div>
+
+        <!-- Step: Login -->
+        <div class="step" id="step-login">
+            <div class="step-title">登录
+                <span id="vpn-badge" class="badge ok">VPN ✓</span>
+            </div>
+            <div class="step-desc">输入您的麻雀OMS账号密码。</div>
+            <div id="alert-login" class="alert"></div>
+            <div class="fg">
+                <label>用户名</label>
+                <input type="text" id="username" placeholder="输入用户名" autocomplete="username">
+            </div>
+            <div class="fg">
+                <label>密码</label>
+                <input type="password" id="password" placeholder="输入密码" onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+            <button class="btn btn-primary" id="btn-login" onclick="doLogin()">登录</button>
+            <button class="btn btn-ghost" onclick="showStep('vpn')">← 重新配置VPN</button>
+        </div>
+    </div>
+
+    <script>
+        function showStep(name) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'))
+            document.getElementById(`step-${name}`).classList.add('active')
+        }
+        function alert_(id, type, msg) {
+            const el = document.getElementById(`alert-${id}`)
+            el.className = `alert show ${type}`; el.textContent = msg
+        }
+        function clearAlert(id) { document.getElementById(`alert-${id}`).className = 'alert' }
+
+        async function init() {
+            const agentOk = await maque.isAgentRunning()
+            if (!agentOk) { showStep('no-agent'); return }
+
+            const vpnOk = await maque.isVpnConnected()
+            const token = await maque.loadToken()
+
+            if (vpnOk && token) { await maque.openMain(token); return }
+            if (vpnOk) { showStep('login'); return }
+            showStep('vpn')
+        }
+
+        async function saveAndConnect() {
+            const conf = document.getElementById('wg-conf').value.trim()
+            if (!conf || !conf.includes('[Interface]')) {
+                alert_('vpn', 'error', '配置无效，请粘贴完整的VPN配置（含[Interface]和[Peer]）')
+                return
+            }
+            const btn = document.getElementById('btn-vpn')
+            btn.disabled = true
+            btn.innerHTML = '<span class="spin"></span>保存中...'
+            clearAlert('vpn')
+
+            const saved = await maque.saveWgConfig(conf)
+            if (!saved.ok && !saved.success) {
+                alert_('vpn', 'error', saved.error || '保存失败')
+                btn.disabled = false; btn.textContent = '保存并连接VPN'
+                return
+            }
+
+            btn.innerHTML = '<span class="spin"></span>连接VPN中...'
+            const result = await maque.startVpn()
+            if (result.ok || result.success || result.already_connected) {
+                showStep('login')
+                setTimeout(() => document.getElementById('username').focus(), 100)
+            } else {
+                alert_('vpn', 'error', result.error || 'VPN连接失败，请检查配置')
+            }
+            btn.disabled = false; btn.textContent = '保存并连接VPN'
+        }
+
+        async function doLogin() {
+            const username = document.getElementById('username').value.trim()
+            const password = document.getElementById('password').value
+            if (!username || !password) { alert_('login', 'error', '请输入用户名和密码'); return }
+
+            const btn = document.getElementById('btn-login')
+            btn.disabled = true
+            btn.innerHTML = '<span class="spin"></span>登录中...'
+            clearAlert('login')
+
+            const result = await maque.login({ username, password })
+            if (result.success) {
+                alert_('login', 'success', '登录成功，正在加载...')
+                await maque.openMain(result.token)
+            } else {
+                alert_('login', 'error', result.error)
+                btn.disabled = false; btn.textContent = '登录'
+            }
+        }
+
+        init()
+    </script>
+</body>
+
+</html>

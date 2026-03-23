@@ -1,0 +1,53 @@
+{
+  "name": "maque-client",
+  "version": "0.1.0",
+  "description": "麻雀OMS 客户端",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.maque.oms",
+    "productName": "麻雀OMS",
+    "directories": { "output": "dist" },
+    "files": [
+      "src/**/*",
+      "ui/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "agent/",
+        "to": "agent/",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/win/",
+        "to": "win/",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "installerLanguages": ["zh_CN"],
+      "language": "2052",
+      "runAfterFinish": true,
+      "include": "installer/windows.nsh"
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
