@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+{% block title %}{{ "修改订单" if order else "新建订单" }}{% endblock %}
+
+{% block content %}
+<div class="page" style="max-width:720px;">
+    <div class="page-header" style="display:flex; align-items:center; justify-content:space-between;">
+        <div>
+            <div class="page-title">{{ "修改订单" if order else "新建订单" }}</div>
+            {% if order %}
+            <div class="page-subtitle" style="font-family:var(--mono);">{{ order.order_number }}</div>
+            {% endif %}
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+            {% if not order %}
+            <!-- OCR scan button — only shown on new order form -->
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-scan-waybill"
+                onclick="scanWaybill()"
+                title="扫描运单自动填写">
+                📷 扫描运单
+            </button>
+            {% endif %}
+            <a href="/orders/pool" class="btn btn-ghost btn-sm">单号池</a>
+            <a href="{{ '/orders/' + order.order_number if order else '/orders' }}" class="btn btn-ghost btn-sm">←
+                返回</a>
+        </div>
+    </div>
+
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+    <!-- OCR status banner — shown when page was opened via OCR, hidden otherwise -->
+    <div id="ocr-banner" style="display:none;
+        background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+        padding:0.65rem 1rem; margin-bottom:1rem;
+        display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+            <span style="font-size:0.82rem; color:var(--text-muted);">
+                📋 已从运单自动填写 — 请核对带
+                <span style="display:inline-block; width:10px; height:10px; border-radius:2px;
+                    background:#e8a84a; vertical-align:middle; margin:0 2px;"></span>
+                标记的字段
+            </span>
+        </div>
+        <button type="button" onclick="clearOcrHighlights()"
+            style="font-size:0.75rem; color:var(--text-muted); background:none; border:none; cursor:pointer;">
+            清除标记
+        </button>
+    </div>
+
+    <div class="card">
+        <form method="post" action="{{ '/orders/' + order.order_number + '/edit' if order else '/orders/new' }}">
+
+            <!-- Basic info -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+
+                <!-- Order number with pool autocomplete -->
+                <div class="form-group" style="position:relative;">
+                    <label class="form-label">单号</label>
+                    <input class="form-input" type="text" name="order_number" id="order_number_input"
+                        value="{{ order.order_number if order else '' }}" placeholder="输入单号自动匹配" autocomplete="off"
+                        {{ 'readonly style="opacity:0.6;"' if order else '' }} required>
+                    <div id="pool-suggestions" style="position:absolute; top:100%; left:0; right:0;
+                        background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+                        z-index:50; max-height:200px; overflow-y:auto; display:none;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">日期</label>
+                    <input class="form-input" type="date" name="date" id="date_input"
+                        value="{{ order.date | string | truncate(10, killwords=True, end='') if order else '' }}"
+                        required>
+                </div>
+
+                <!-- Flight code with autocomplete -->
+                <div class="form-group" style="position:relative;">
+                    <label class="form-label">航班号</label>
+                    <input class="form-input" type="text" name="flight_code" id="flight_code_input"
+                        value="{{ order.flight_code if order else '' }}" autocomplete="off" required>
+                    <input type="hidden" id="flight_id_input" value="">
+                    <div id="flight-suggestions" style="position:absolute; top:100%; left:0; right:0;
+                        background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+                        z-index:50; max-height:200px; overflow-y:auto; display:none;"></div>
+                </div>
+
+                <!-- Express company -->
+                <div class="form-group">
+                    <label class="form-label">快递公司</label>
+                    <select class="form-input" id="express_company_select" required>
+                        <option value="">— 先选择航班 —</option>
+                        {% if order %}
+                        <option value="" data-name="{{ order.express_company }}" selected>{{ order.express_company }}
+                        </option>
+                        {% endif %}
+                    </select>
+                    <input type="hidden" name="express_company" id="express_company_name"
+                        value="{{ order.express_company if order else '' }}">
+                </div>
+
+                <!-- Destination dropdown -->
+                <div class="form-group">
+                    <label class="form-label">目的地</label>
+                    <select class="form-input" name="destination" id="destination_select" required>
+                        <option value="">— 先选择快递公司 —</option>
+                        {% if order and order.destination %}
+                        <option value="{{ order.destination }}" selected>{{ order.destination }}</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <!-- Is transit -->
+                <div class="form-group" style="display:flex; align-items:flex-end; padding-bottom:0.25rem;">
+                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                        <input type="checkbox" name="is_transit" id="is_transit_check" value="1" {% if order and
+                            order.is_transit %}checked{% endif %}>
+                        <span class="form-label" style="margin:0;">是否中转</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">仓位量</label>
+                    <input class="form-input" type="number" name="cabin_capacity"
+                        value="{{ order.cabin_capacity if order else '' }}" step="any" min="0">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">重量 (kg)</label>
+                    <input class="form-input" type="number" name="weight" id="weight_input"
+                        value="{{ order.weight if order else '' }}"
+                        step="any" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">毛重 (kg)</label>
+                    <input class="form-input" type="number" name="gross_weight" id="gross_weight_input"
+                        value="{{ order.gross_weight if order else '' }}" step="any" min="0" required>
+                </div>
+            </div>
+
+            <!-- Item info -->
+            <div style="margin-top:0.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+                <div
+                    style="font-size:0.82rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.75rem;">
+                    货物信息</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label class="form-label">货物代码</label>
+                        <select class="form-input" name="item_code_id" id="item-code-options">
+                            <option value="">— 先选择目的地 —</option>
+                            {% for ic in item_codes %}
+                            <option value="{{ ic.id }}" {% if order and order.item_code_id==ic.id %}selected{% endif %}>
+                                {{ ic.code }}{% if ic.name %} · {{ ic.name }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">操作类型</label>
+                        <select class="form-input" name="operation_type">
+                            <option value="">— 选择 —</option>
+                            <option value="normal" {% if order and order.operation_type and
+                                order.operation_type.value=='normal' %}selected{% endif %}>普货</option>
+                            <option value="fresh" {% if order and order.operation_type and
+                                order.operation_type.value=='fresh' %}selected{% endif %}>生鲜</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">货物品名</label>
+                        <input class="form-input" type="text" name="item_name" id="item_name_input"
+                            value="{{ order.item_name if order and order.item_name else '' }}" placeholder="例. 电子产品"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">件数</label>
+                        <input class="form-input" type="number" name="item_number" id="item_number_input"
+                            value="{{ order.item_number if order and order.item_number else '' }}" min="1" step="1"
+                            placeholder="例. 10" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional charges -->
+            <div style="margin-top:0.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+                <div
+                    style="font-size:0.82rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.75rem;">
+                    附加费用</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label class="form-label">电报费 (¥)</label>
+                        <input class="form-input" type="number" name="fax_charge" step="any" min="0"
+                            value="{{ order.fax_charge if order else '0' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">冷库费 (¥)</label>
+                        <input class="form-input" type="number" name="cold_storage_charge" step="any" min="0"
+                            value="{{ order.cold_storage_charge if order else '0' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">派送费 (¥)</label>
+                        <input class="form-input" type="number" name="delivery_charge" step="any" min="0"
+                            value="{{ order.delivery_charge if order else '0' }}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Note -->
+            <div class="form-group" style="margin-top:0.75rem;">
+                <label class="form-label">备注</label>
+                <textarea class="form-input" name="note" rows="2"
+                    style="resize:vertical;">{{ order.note if order else '' }}</textarea>
+            </div>
+
+            <div style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:0.5rem;">
+                <a href="{{ '/orders/' + order.order_number if order else '/orders' }}" class="btn btn-ghost">取消</a>
+                <button class="btn btn-primary" type="submit">{{ "保存变更" if order else "创建订单" }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ── OCR pre-fill ─────────────────────────────────────────────────────────
+    // Confidence threshold below which a field gets an amber highlight
+    const OCR_WARN_THRESHOLD = 0.85
+
+    // Field name → input element id mapping
+    const OCR_FIELD_IDS = {
+        order_number: 'order_number_input',
+        date:         'date_input',
+        flight_code:  'flight_code_input',
+        weight:       'weight_input',
+        gross_weight: 'gross_weight_input',
+        item_name:    'item_name_input',
+        item_number:  'item_number_input',
+        // destination is handled separately (select element)
+    }
+
+    function applyOcrParams() {
+        const params = new URLSearchParams(window.location.search)
+        if (!params.get('ocr')) return
+
+        // Show the OCR banner
+        const banner = document.getElementById('ocr-banner')
+        if (banner) banner.style.display = 'flex'
+
+        const lowConf = []
+
+        // Fill plain input fields
+        for (const [field, elId] of Object.entries(OCR_FIELD_IDS)) {
+            const value = params.get(field)
+            const conf  = parseFloat(params.get(`ocr_conf_${field}`) || '1')
+            if (!value) continue
+
+            const el = document.getElementById(elId)
+            if (!el) continue
+
+            el.value = value
+
+            if (conf < OCR_WARN_THRESHOLD) {
+                el.style.borderColor = '#e8a84a'
+                el.style.background  = 'rgba(232,168,74,0.07)'
+                el.title = `OCR置信度: ${Math.round(conf * 100)}%`
+                lowConf.push(field)
+            }
+        }
+
+        // Flight code — trigger the cascade after setting the value
+        const flightConf = parseFloat(params.get('ocr_conf_flight_code') || '1')
+        const flightCode = params.get('flight_code')
+        if (flightCode) {
+            const flightInput = document.getElementById('flight_code_input')
+            if (flightInput) {
+                flightInput.value = flightCode
+                // Dispatch input event to trigger autocomplete fetch
+                flightInput.dispatchEvent(new Event('input', { bubbles: true }))
+                if (flightConf < OCR_WARN_THRESHOLD) {
+                    flightInput.style.borderColor = '#e8a84a'
+                    flightInput.style.background  = 'rgba(232,168,74,0.07)'
+                    flightInput.title = `OCR置信度: ${Math.round(flightConf * 100)}%`
+                }
+            }
+        }
+    }
+
+    function clearOcrHighlights() {
+        document.querySelectorAll('.form-input').forEach(el => {
+            el.style.borderColor = ''
+            el.style.background  = ''
+            el.title = ''
+        })
+        const banner = document.getElementById('ocr-banner')
+        if (banner) banner.style.display = 'none'
+    }
+
+    // ── Scan waybill (Electron only) ──────────────────────────────────────────
+    function scanWaybill() {
+        if (typeof window.maque === 'undefined') return
+        // Opens the camera/upload window — OCR result navigates back to this form
+        window.maque.openCamera()
+    }
+
+    // Show scan button only inside Electron
+    document.addEventListener('DOMContentLoaded', () => {
+        const btn = document.getElementById('btn-scan-waybill')
+        if (btn) btn.style.display = (typeof window.maque !== 'undefined') ? '' : 'none'
+        applyOcrParams()
+    })
+
+    // ── Order number pool autocomplete ────────────────────────────────────────
+    const orderInput = document.getElementById('order_number_input');
+    if (orderInput && !orderInput.readOnly) {
+        orderInput.addEventListener('input', function () {
+            const q = this.value.trim();
+            if (q.length < 2) { document.getElementById('pool-suggestions').style.display = 'none'; return; }
+            fetch('/orders/pool-search?q=' + encodeURIComponent(q))
+                .then(r => r.text())
+                .then(html => {
+                    const el = document.getElementById('pool-suggestions');
+                    el.innerHTML = html;
+                    el.style.display = html.trim() ? 'block' : 'none';
+                });
+        });
+    }
+
+    function selectOrderNumber(num) {
+        document.getElementById('order_number_input').value = num;
+        document.getElementById('pool-suggestions').style.display = 'none';
+    }
+
+    // ── Flight code autocomplete ──────────────────────────────────────────────
+    const flightInput = document.getElementById('flight_code_input');
+    if (flightInput) {
+        flightInput.addEventListener('input', function () {
+            const q = this.value.trim();
+            if (q.length < 2) { document.getElementById('flight-suggestions').style.display = 'none'; return; }
+            fetch('/flights/search?flight_code=' + encodeURIComponent(q))
+                .then(r => r.text())
+                .then(html => {
+                    const el = document.getElementById('flight-suggestions');
+                    el.innerHTML = html;
+                    el.style.display = html.trim() ? 'block' : 'none';
+                });
+        });
+    }
+
+    function selectFlight(flightCode, destination, flightId) {
+        document.getElementById('flight_code_input').value = flightCode;
+        document.getElementById('flight_id_input').value = flightId;
+        document.getElementById('flight-suggestions').style.display = 'none';
+
+        document.getElementById('express_company_select').innerHTML = '<option value="">— 加载中... —</option>';
+        document.getElementById('express_company_name').value = '';
+        document.getElementById('destination_select').innerHTML = '<option value="">— 先选择快递公司 —</option>';
+        document.getElementById('item-code-options').innerHTML = '<option value="">— 先选择目的地 —</option>';
+
+        fetch('/orders/express-options?flight_id=' + flightId)
+            .then(r => r.text())
+            .then(html => { document.getElementById('express_company_select').innerHTML = html; });
+    }
+
+    // ── Express company change ────────────────────────────────────────────────
+    document.getElementById('express_company_select').addEventListener('change', function () {
+        const flightId = document.getElementById('flight_id_input').value;
+        const expressId = this.value;
+        const opt = this.options[this.selectedIndex];
+        document.getElementById('express_company_name').value = opt ? opt.text : '';
+
+        document.getElementById('destination_select').innerHTML = '<option value="">— 加载中... —</option>';
+        document.getElementById('item-code-options').innerHTML = '<option value="">— 先选择目的地 —</option>';
+
+        if (flightId && expressId) {
+            fetch('/orders/destination-options?flight_id=' + flightId + '&express_company_id=' + expressId)
+                .then(r => r.text())
+                .then(html => {
+                    const sel = document.getElementById('destination_select');
+                    sel.innerHTML = html;
+                    const real = sel.querySelectorAll('option[value]:not([value=""])');
+                    if (real.length === 1) { sel.value = real[0].value; reloadItemCodes(); }
+                });
+        } else {
+            document.getElementById('destination_select').innerHTML = '<option value="">— 先选择快递公司 —</option>';
+        }
+    });
+
+    // ── Reload item codes ─────────────────────────────────────────────────────
+    function reloadItemCodes() {
+        const flightId = document.getElementById('flight_id_input').value;
+        const expressId = document.getElementById('express_company_select').value;
+        const dest = document.getElementById('destination_select').value;
+        const transit = document.getElementById('is_transit_check').checked ? '1' : '';
+        if (!flightId || !expressId || !dest) {
+            document.getElementById('item-code-options').innerHTML = '<option value="">— 先选择目的地 —</option>';
+            return;
+        }
+        document.getElementById('item-code-options').innerHTML = '<option value="">— 加载中... —</option>';
+        fetch('/orders/item-code-options?flight_id=' + flightId +
+            '&express_company_id=' + expressId +
+            '&destination=' + encodeURIComponent(dest) +
+            '&is_transit=' + transit)
+            .then(r => r.text())
+            .then(html => {
+                const ic = document.getElementById('item-code-options');
+                ic.innerHTML = html;
+                if (ic.options.length <= 1 && !document.getElementById('is_transit_check').checked) {
+                    fetch('/orders/item-code-options?flight_id=' + flightId +
+                        '&express_company_id=' + expressId +
+                        '&destination=' + encodeURIComponent(dest) +
+                        '&is_transit=1')
+                        .then(r => r.text())
+                        .then(h2 => {
+                            const tmp = document.createElement('select');
+                            tmp.innerHTML = h2;
+                            if (tmp.options.length > 1) {
+                                document.getElementById('is_transit_check').checked = true;
+                                ic.innerHTML = h2;
+                            }
+                        });
+                }
+            });
+    }
+
+    document.getElementById('destination_select').addEventListener('change', reloadItemCodes);
+    document.getElementById('is_transit_check').addEventListener('change', reloadItemCodes);
+
+    // ── Hide dropdowns on outside click ──────────────────────────────────────
+    document.addEventListener('click', function (e) {
+        ['pool-suggestions', 'flight-suggestions'].forEach(id => {
+            const el = document.getElementById(id);
+            const inputId = id === 'pool-suggestions' ? 'order_number_input' : 'flight_code_input';
+            if (el && !el.contains(e.target) && e.target.id !== inputId) el.style.display = 'none';
+        });
+    });
+</script>
+{% endblock %}

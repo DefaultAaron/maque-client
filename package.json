@@ -22,12 +22,22 @@
       {
         "from": "agent/",
         "to": "agent/",
-        "filter": ["**/*"]
+        "filter": ["**/*", "!install-agent.bat", "!install-mac.sh"]
       },
       {
         "from": "resources/win/",
-        "to": "win/",
+        "to": "resources/win/",
         "filter": ["**/*"]
+      },
+      {
+        "from": "resources/node/",
+        "to": "resources/node/",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "ocr/",
+        "to": "ocr/",
+        "filter": ["ocr_agent.py"]
       }
     ],
     "mac": {
@@ -35,7 +45,8 @@
       "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
       "oneClick": false,

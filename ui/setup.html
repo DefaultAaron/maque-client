@@ -14,6 +14,7 @@
             --muted: #7a7a85;
             --danger: #e85a4a;
             --success: #4ae8a0;
+            --warn: #e8a84a;
             --mono: 'Courier New', monospace;
         }
 
@@ -192,12 +193,6 @@
             color: #7ab8f5;
         }
 
-        .alert.warn {
-            background: #2a2010;
-            border: 1px solid #a07030;
-            color: #e8a84a;
-        }
-
         .spin {
             display: inline-block;
             width: 13px;
@@ -207,6 +202,18 @@
             border-radius: 50%;
             animation: spin .8s linear infinite;
             margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        .spin-muted {
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border: 2px solid var(--border);
+            border-top-color: var(--muted);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+            margin-right: 8px;
             vertical-align: middle;
         }
 
@@ -238,6 +245,64 @@
             color: var(--danger);
             border: 1px solid var(--danger);
         }
+
+        /* ── OCR progress ── */
+        .ocr-steps {
+            display: flex;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .ocr-step-dot {
+            flex: 1;
+            height: 3px;
+            border-radius: 2px;
+            background: var(--border);
+            transition: background 300ms;
+        }
+
+        .ocr-step-dot.done {
+            background: var(--success);
+        }
+
+        .ocr-step-dot.active {
+            background: var(--accent);
+        }
+
+        .progress-wrap {
+            background: var(--border);
+            border-radius: 4px;
+            height: 6px;
+            margin-bottom: 0.6rem;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 200ms;
+            width: 0%;
+        }
+
+        .ocr-step-label {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .ocr-log {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            color: var(--muted);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.5rem;
+            height: 80px;
+            overflow-y: auto;
+            margin-bottom: 0.75rem;
+        }
     </style>
 </head>
 
@@ -248,7 +313,15 @@
             <div class="logo-sub">Order Management System</div>
         </div>
 
-        <!-- Step: Agent not running -->
+        <!-- Step: checking -->
+        <div class="step active" id="step-loading">
+            <div class="step-desc" style="text-align:center;padding:1rem 0;">
+                <span class="spin-muted"></span>
+                <span style="color:var(--muted);font-size:0.85rem;">正在检测环境...</span>
+            </div>
+        </div>
+
+        <!-- Step: agent not installed -->
         <div class="step" id="step-no-agent">
             <div class="step-title">需要安装VPN代理</div>
             <div class="step-desc">
@@ -275,11 +348,9 @@
             <button class="btn btn-primary" id="btn-vpn" onclick="saveAndConnect()">保存并连接VPN</button>
         </div>
 
-        <!-- Step: Login -->
+        <!-- Step: login -->
         <div class="step" id="step-login">
-            <div class="step-title">登录
-                <span id="vpn-badge" class="badge ok">VPN ✓</span>
-            </div>
+            <div class="step-title">登录 <span id="vpn-badge" class="badge ok">VPN ✓</span></div>
             <div class="step-desc">输入您的麻雀OMS账号密码。</div>
             <div id="alert-login" class="alert"></div>
             <div class="fg">
@@ -293,9 +364,38 @@
             <button class="btn btn-primary" id="btn-login" onclick="doLogin()">登录</button>
             <button class="btn btn-ghost" onclick="showStep('vpn')">← 重新配置VPN</button>
         </div>
+
+        <!-- Step: OCR setup (optional, offered after login) -->
+        <div class="step" id="step-ocr">
+            <div class="step-title">安装扫描识别功能 <span class="badge">可选</span></div>
+            <div class="step-desc">
+                下载OCR模型后可通过摄像头或图片自动识别运单信息。<br>
+                需下载约 <strong style="color:var(--text)">300MB</strong>，需要网络连接。<br>
+                可以跳过，稍后从系统托盘安装。
+            </div>
+            <div id="alert-ocr" class="alert"></div>
+
+            <!-- Progress UI (hidden until install starts) -->
+            <div id="ocr-progress-ui" style="display:none;">
+                <div class="ocr-steps" id="ocr-step-dots"></div>
+                <div class="ocr-step-label" id="ocr-step-label">准备中...</div>
+                <div class="progress-wrap">
+                    <div class="progress-bar" id="ocr-progress-bar"></div>
+                </div>
+                <div class="ocr-log" id="ocr-log"></div>
+            </div>
+
+            <button class="btn btn-primary" id="btn-ocr-install" onclick="startOcrInstall()">
+                开始下载安装
+            </button>
+            <button class="btn btn-ghost" id="btn-ocr-skip" onclick="finishSetup()">
+                跳过，稍后安装
+            </button>
+        </div>
     </div>
 
     <script>
+        // ── Step router ───────────────────────────────────────────────
         function showStep(name) {
             document.querySelectorAll('.step').forEach(s => s.classList.remove('active'))
             document.getElementById(`step-${name}`).classList.add('active')
@@ -306,18 +406,35 @@
         }
         function clearAlert(id) { document.getElementById(`alert-${id}`).className = 'alert' }
 
+        // ── Init ──────────────────────────────────────────────────────
         async function init() {
+            showStep('loading')
             const agentOk = await maque.isAgentRunning()
             if (!agentOk) { showStep('no-agent'); return }
-
             const vpnOk = await maque.isVpnConnected()
             const token = await maque.loadToken()
-
-            if (vpnOk && token) { await maque.openMain(token); return }
+            if (vpnOk && token) { await checkOcrThenOpen(token); return }
             if (vpnOk) { showStep('login'); return }
             showStep('vpn')
         }
 
+        // After login succeeds — check OCR, offer install or go straight to main
+        async function checkOcrThenOpen(token) {
+            const ocrReady = await maque.ocrIsInstalled()
+            if (ocrReady) {
+                await maque.openMain(token)
+            } else {
+                // Store token so finishSetup() can open main without re-login
+                window._pendingToken = token
+                showStep('ocr')
+            }
+        }
+
+        async function finishSetup() {
+            await maque.openMain(window._pendingToken)
+        }
+
+        // ── VPN ───────────────────────────────────────────────────────
         async function saveAndConnect() {
             const conf = document.getElementById('wg-conf').value.trim()
             if (!conf || !conf.includes('[Interface]')) {
@@ -325,17 +442,13 @@
                 return
             }
             const btn = document.getElementById('btn-vpn')
-            btn.disabled = true
-            btn.innerHTML = '<span class="spin"></span>保存中...'
+            btn.disabled = true; btn.innerHTML = '<span class="spin"></span>保存中...'
             clearAlert('vpn')
-
             const saved = await maque.saveWgConfig(conf)
             if (!saved.ok && !saved.success) {
                 alert_('vpn', 'error', saved.error || '保存失败')
-                btn.disabled = false; btn.textContent = '保存并连接VPN'
-                return
+                btn.disabled = false; btn.textContent = '保存并连接VPN'; return
             }
-
             btn.innerHTML = '<span class="spin"></span>连接VPN中...'
             const result = await maque.startVpn()
             if (result.ok || result.success || result.already_connected) {
@@ -347,25 +460,80 @@
             btn.disabled = false; btn.textContent = '保存并连接VPN'
         }
 
+        // ── Login ─────────────────────────────────────────────────────
         async function doLogin() {
             const username = document.getElementById('username').value.trim()
             const password = document.getElementById('password').value
             if (!username || !password) { alert_('login', 'error', '请输入用户名和密码'); return }
-
             const btn = document.getElementById('btn-login')
-            btn.disabled = true
-            btn.innerHTML = '<span class="spin"></span>登录中...'
+            btn.disabled = true; btn.innerHTML = '<span class="spin"></span>登录中...'
             clearAlert('login')
-
             const result = await maque.login({ username, password })
             if (result.success) {
-                alert_('login', 'success', '登录成功，正在加载...')
-                await maque.openMain(result.token)
+                alert_('login', 'success', '登录成功...')
+                await checkOcrThenOpen(result.token)
             } else {
                 alert_('login', 'error', result.error)
                 btn.disabled = false; btn.textContent = '登录'
             }
         }
+
+        // ── OCR install ───────────────────────────────────────────────
+        let _totalSteps = 0
+        let _stepDots = []
+
+        async function startOcrInstall() {
+            document.getElementById('btn-ocr-install').style.display = 'none'
+            document.getElementById('btn-ocr-skip').style.display = 'none'
+            document.getElementById('ocr-progress-ui').style.display = 'block'
+            clearAlert('ocr')
+
+            const result = await maque.ocrInstall()
+            if (result.ok) {
+                alert_('ocr', 'success', '✓ OCR安装完成，正在启动...')
+                setTimeout(finishSetup, 1200)
+            } else {
+                alert_('ocr', 'error', `安装失败: ${result.error}`)
+                document.getElementById('btn-ocr-skip').style.display = ''
+                document.getElementById('btn-ocr-skip').textContent = '跳过，稍后重试'
+            }
+        }
+
+        // Listen for progress events pushed from main process
+        window.electronAPI?.onOcrStep(({ label, idx, total }) => {
+            if (_totalSteps !== total) {
+                _totalSteps = total
+                const dots = document.getElementById('ocr-step-dots')
+                dots.innerHTML = ''
+                _stepDots = []
+                for (let i = 0; i < total; i++) {
+                    const d = document.createElement('div')
+                    d.className = 'ocr-step-dot'
+                    dots.appendChild(d)
+                    _stepDots.push(d)
+                }
+            }
+            _stepDots.forEach((d, i) => {
+                d.className = 'ocr-step-dot' + (i < idx - 1 ? ' done' : i === idx - 1 ? ' active' : '')
+            })
+            document.getElementById('ocr-step-label').textContent = label
+            document.getElementById('ocr-progress-bar').style.width = '0%'
+        })
+
+        window.electronAPI?.onOcrProgress(({ pct, detail }) => {
+            document.getElementById('ocr-progress-bar').style.width = pct + '%'
+            if (detail) document.getElementById('ocr-step-label').textContent = detail
+        })
+
+        window.electronAPI?.onOcrLog(({ line }) => {
+            if (!line) return
+            const el = document.getElementById('ocr-log')
+            el.textContent += line + '\n'
+            el.scrollTop = el.scrollHeight
+        })
+
+        // Triggered from tray menu "Install OCR" click
+        window.electronAPI?.onGotoOcrSetup(() => showStep('ocr'))
 
         init()
     </script>

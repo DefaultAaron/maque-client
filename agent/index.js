@@ -13,9 +13,18 @@ const CONF_DIR    = IS_WIN
     : '/etc/wireguard'
 const CONF_PATH   = path.join(CONF_DIR, 'maque.conf')
 const CONF_NAME   = 'maque'
-const WG_BIN      = IS_WIN ? path.join(__dirname, 'wg', 'wg.exe')       : '/opt/maque-agent/wg/wg'
-const WGQUICK     = IS_WIN ? path.join(__dirname, 'wg', 'wireguard.exe') : '/opt/maque-agent/wg/wg-quick'
-const BASH        = '/opt/homebrew/bin/bash'
+
+// WireGuard binaries — bundled alongside this script
+// On Windows: agent/wg/wireguard.exe (tunnel service manager)
+// On Mac:     installed to /opt/maque-agent/wg/ by install-mac.sh
+const WGQUICK     = IS_WIN
+    ? path.join(__dirname, 'wg', 'wireguard.exe')
+    : '/opt/maque-agent/wg/wg-quick'
+
+// Bash: prefer /bin/bash (present on all macOS); /opt/homebrew/bin/bash only
+// exists on Homebrew Macs and is not needed since we invoke wg-quick directly.
+const BASH        = '/bin/bash'
+
 const SECRET_FILE = IS_WIN
     ? path.join(process.env.ProgramData || 'C:\\ProgramData', 'MaqueOMS', 'agent.secret')
     : '/etc/maque-agent.secret'
@@ -36,10 +45,15 @@ function ensureSecret() {
 function isVpnConnected() {
     try {
         if (IS_MAC) {
-            const out = execSync('/sbin/ifconfig', { encoding: 'utf8', timeout: 2000 })
-            // utun4+ with mtu 1420 is WireGuard (standard utun are mtu 1380/1500/2000)
-            return out.includes('utun4') || out.includes('utun5') || out.includes('utun6')
+            // Check whether the named WireGuard interface (maque) is up.
+            // wg-quick uses the config filename as the interface name on macOS.
+            // `wg show maque` exits 0 if the interface exists, non-zero otherwise.
+            execSync(`/opt/maque-agent/wg/wg show ${CONF_NAME}`, {
+                stdio: 'ignore', timeout: 2000,
+            })
+            return true
         }
+        // Windows: ping the VPN gateway to confirm the tunnel is up
         execSync(`ping -n 1 -w 1000 10.0.0.1`, { stdio: 'ignore', timeout: 2000 })
         return true
     } catch { return false }
@@ -58,9 +72,8 @@ function saveConf(content) {
 
 function vpnUp() {
     return new Promise((resolve) => {
-        // Already connected — skip
         if (isVpnConnected()) {
-            console.log('[agent] VPN already connected, skipping wg-quick up')
+            console.log('[agent] VPN already connected, skipping')
             return resolve({ success: true, already_connected: true })
         }
         const cmd = IS_WIN
@@ -133,7 +146,7 @@ const server = http.createServer(async (req, res) => {
         if (!hasConf()) return sendJson(res, 400, { error: 'No config' })
         const result = await vpnUp()
         if (result.success) {
-            // Wait up to 3s for interface to appear
+            // Wait up to 3s for interface to come up
             for (let i = 0; i < 6; i++) {
                 await new Promise(r => setTimeout(r, 500))
                 if (isVpnConnected()) break

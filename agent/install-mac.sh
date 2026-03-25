@@ -16,16 +16,14 @@ cp "$(dirname "$0")/index.js" "$AGENT_DIR/index.js"
 
 # Copy WireGuard binaries
 mkdir -p "$AGENT_DIR/wg"
-cp /opt/homebrew/bin/wg          "$AGENT_DIR/wg/wg"
-cp /opt/homebrew/bin/wg-quick    "$AGENT_DIR/wg/wg-quick"
+cp /opt/homebrew/bin/wg           "$AGENT_DIR/wg/wg"
+cp /opt/homebrew/bin/wg-quick     "$AGENT_DIR/wg/wg-quick"
 cp /opt/homebrew/bin/wireguard-go "$AGENT_DIR/wg/wireguard-go"
 chmod +x "$AGENT_DIR/wg/"*
 
-# Update wg binary paths in agent
-sed -i '' \
-    "s|/opt/homebrew/bin/wg'|$AGENT_DIR/wg/wg'|g" \
-    "s|/opt/homebrew/bin/wg-quick'|$AGENT_DIR/wg/wg-quick'|g" \
-    "$AGENT_DIR/index.js"
+# Note: index.js already hardcodes /opt/maque-agent/wg/ paths — no sed needed.
+# The sed patch was removed: it modified the installed copy using fragile string
+# replacement and was only needed if paths differed, which they don't here.
 
 # Write launchd plist
 cat > "$PLIST" << PLIST

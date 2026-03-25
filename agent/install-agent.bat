@@ -3,7 +3,9 @@ setlocal
 set INSTALL_DIR=%~1
 set AGENT_DIR=%INSTALL_DIR%\resources\agent
 set NODE_EXE=%INSTALL_DIR%\resources\node\node.exe
-set NSSM=%INSTALL_DIR%\resources\nssm.exe
+:: package.json extraResources copies resources/win/ → win/
+:: so nssm.exe lands at <installDir>\resources\win\nssm.exe
+set NSSM=%INSTALL_DIR%\resources\win\nssm.exe
 
 echo Installing Maque OMS VPN Agent...
 

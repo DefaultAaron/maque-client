@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>扫描运单</title>
+    <style>
+        :root {
+            --bg: #0f0f11;
+            --surface: #17171a;
+            --border: #2a2a2f;
+            --accent: #e8c84a;
+            --text: #e8e8ec;
+            --muted: #7a7a85;
+            --danger: #e85a4a;
+            --success: #4ae8a0;
+            --mono: 'Courier New', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            -webkit-font-smoothing: antialiased;
+            -webkit-app-region: drag;
+            overflow: hidden;
+        }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.65rem 1rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            -webkit-app-region: drag;
+            flex-shrink: 0;
+        }
+        .toolbar-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .toolbar-sub {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-top: 0.1rem;
+        }
+        .toolbar-actions {
+            display: flex;
+            gap: 0.5rem;
+            -webkit-app-region: no-drag;
+        }
+        .btn {
+            padding: 0.45rem 0.9rem;
+            border-radius: 6px;
+            border: none;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 150ms;
+        }
+        .btn-primary { background: var(--accent); color: #0f0f11; }
+        .btn-primary:hover { background: #d4b43e; }
+        .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn-ghost {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+        /* ── Tabs ── */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            flex-shrink: 0;
+            -webkit-app-region: no-drag;
+        }
+        .tab {
+            padding: 0.6rem 1.2rem;
+            font-size: 0.82rem;
+            color: var(--muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 150ms;
+        }
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* ── Panel ── */
+        .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+        .panel.active { display: flex; }
+
+        /* ── Camera panel ── */
+        .camera-wrap {
+            flex: 1;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        /* Guide overlay — helps staff align the waybill */
+        .guide-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        .guide-box {
+            position: absolute;
+            top: 12%;
+            left: 8%;
+            right: 8%;
+            bottom: 12%;
+            border: 2px solid rgba(232, 200, 74, 0.6);
+            border-radius: 6px;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
+        }
+        .guide-label {
+            position: absolute;
+            top: calc(12% - 24px);
+            left: 8%;
+            font-size: 0.72rem;
+            color: rgba(232, 200, 74, 0.8);
+            font-family: var(--mono);
+        }
+        .camera-footer {
+            padding: 0.75rem 1rem;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-shrink: 0;
+            -webkit-app-region: no-drag;
+        }
+        #camera-error {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.85rem;
+            display: none;
+        }
+
+        /* ── Upload panel ── */
+        .upload-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            cursor: pointer;
+            transition: background 150ms;
+            -webkit-app-region: no-drag;
+        }
+        .upload-area:hover, .upload-area.drag-over {
+            background: rgba(232, 200, 74, 0.04);
+        }
+        .upload-icon {
+            font-size: 2.5rem;
+            opacity: 0.5;
+        }
+        .upload-label {
+            font-size: 0.9rem;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.6;
+        }
+        .upload-label strong { color: var(--accent); font-weight: 500; }
+        .upload-preview {
+            max-width: 100%;
+            max-height: 260px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            display: none;
+            object-fit: contain;
+        }
+        #file-input { display: none; }
+
+        /* ── Processing overlay ── */
+        .processing {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 15, 17, 0.88);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            z-index: 100;
+        }
+        .processing.show { display: flex; }
+        .spin {
+            width: 32px; height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .processing-label {
+            font-size: 0.85rem;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        /* ── Status bar ── */
+        .status-bar {
+            padding: 0.35rem 1rem;
+            font-size: 0.72rem;
+            font-family: var(--mono);
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <div>
+        <div class="toolbar-title">扫描运单</div>
+        <div class="toolbar-sub">将运单置于框内后拍照，或上传图片</div>
+    </div>
+    <div class="toolbar-actions">
+        <button class="btn btn-ghost" onclick="window.close()">取消</button>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" id="tab-camera" onclick="switchTab('camera')">📷 实时拍照</div>
+    <div class="tab" id="tab-upload" onclick="switchTab('upload')">🖼 上传图片</div>
+</div>
+
+<!-- Camera panel -->
+<div class="panel active" id="panel-camera">
+    <div class="camera-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="guide-overlay">
+            <div class="guide-box"></div>
+            <div class="guide-label">将运单对齐框内</div>
+        </div>
+        <div id="camera-error">
+            无法访问摄像头<br>
+            <span style="font-size:0.78rem;">请检查摄像头是否已连接，或使用上传图片</span>
+        </div>
+    </div>
+    <div class="camera-footer">
+        <select id="camera-select" class="btn btn-ghost"
+            style="flex:1; padding:0.4rem 0.6rem; font-size:0.78rem; background:var(--bg); color:var(--muted); border:1px solid var(--border); border-radius:6px;">
+            <option value="">— 选择摄像头 —</option>
+        </select>
+        <button class="btn btn-primary" id="btn-capture" onclick="capture()" style="min-width:90px;">
+            拍照识别
+        </button>
+    </div>
+</div>
+
+<!-- Upload panel -->
+<div class="panel" id="panel-upload">
+    <div class="upload-area" id="drop-zone"
+        onclick="document.getElementById('file-input').click()"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event)">
+        <div class="upload-icon">🖼</div>
+        <div class="upload-label">
+            点击选择图片，或将文件拖拽到此处<br>
+            <strong>支持 JPG、PNG、BMP、WEBP</strong>
+        </div>
+        <img id="upload-preview" class="upload-preview" alt="预览">
+    </div>
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/bmp,image/webp"
+        onchange="onFileSelected(this)">
+    <div style="padding:0.75rem 1rem; background:var(--surface); border-top:1px solid var(--border);
+        display:flex; justify-content:flex-end; gap:0.5rem; flex-shrink:0; -webkit-app-region:no-drag;">
+        <button class="btn btn-ghost" id="btn-clear-upload" onclick="clearUpload()" style="display:none;">
+            重新选择
+        </button>
+        <button class="btn btn-primary" id="btn-ocr-upload" onclick="ocrUpload()" disabled>
+            识别运单
+        </button>
+    </div>
+</div>
+
+<!-- Processing overlay -->
+<div class="processing" id="processing">
+    <div class="spin"></div>
+    <div class="processing-label" id="processing-label">正在识别...</div>
+</div>
+
+<div class="status-bar" id="status-bar">就绪</div>
+
+<canvas id="capture-canvas" style="display:none;"></canvas>
+
+<script>
+    let stream      = null
+    let uploadB64   = null
+    let activeTab   = 'camera'
+
+    // ── Tab switching ─────────────────────────────────────────────
+    function switchTab(tab) {
+        activeTab = tab
+        document.getElementById('tab-camera').classList.toggle('active', tab === 'camera')
+        document.getElementById('tab-upload').classList.toggle('active', tab === 'upload')
+        document.getElementById('panel-camera').classList.toggle('active', tab === 'camera')
+        document.getElementById('panel-upload').classList.toggle('active', tab === 'upload')
+        if (tab === 'camera' && !stream) initCamera()
+    }
+
+    // ── Camera ───────────────────────────────────────────────────
+    async function initCamera() {
+        const video = document.getElementById('video')
+        const errEl = document.getElementById('camera-error')
+        try {
+            // Enumerate devices first to populate selector
+            const devices = await navigator.mediaDevices.enumerateDevices()
+            const cameras  = devices.filter(d => d.kind === 'videoinput')
+            const sel = document.getElementById('camera-select')
+            sel.innerHTML = cameras.map((c, i) =>
+                `<option value="${c.deviceId}">${c.label || '摄像头 ' + (i+1)}</option>`
+            ).join('')
+
+            await startCamera(cameras[0]?.deviceId)
+        } catch (e) {
+            video.style.display = 'none'
+            errEl.style.display = 'block'
+            setStatus('摄像头访问失败: ' + e.message)
+        }
+    }
+
+    async function startCamera(deviceId) {
+        if (stream) stream.getTracks().forEach(t => t.stop())
+        const constraints = {
+            video: deviceId
+                ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                : { width: { ideal: 1920 }, height: { ideal: 1080 } }
+        }
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+        document.getElementById('video').srcObject = stream
+        setStatus('摄像头已就绪')
+    }
+
+    document.getElementById('camera-select').addEventListener('change', function() {
+        if (this.value) startCamera(this.value)
+    })
+
+    function capture() {
+        const video  = document.getElementById('video')
+        const canvas = document.getElementById('capture-canvas')
+        canvas.width  = video.videoWidth  || 1280
+        canvas.height = video.videoHeight || 720
+        canvas.getContext('2d').drawImage(video, 0, 0)
+        // Use JPEG at 92% quality — good balance of size vs accuracy
+        const b64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1]
+        sendToOcr(b64)
+    }
+
+    // ── Upload ───────────────────────────────────────────────────
+    function onFileSelected(input) {
+        const file = input.files[0]
+        if (!file) return
+        loadFile(file)
+    }
+    function onDragOver(e) {
+        e.preventDefault()
+        document.getElementById('drop-zone').classList.add('drag-over')
+    }
+    function onDragLeave(e) {
+        document.getElementById('drop-zone').classList.remove('drag-over')
+    }
+    function onDrop(e) {
+        e.preventDefault()
+        document.getElementById('drop-zone').classList.remove('drag-over')
+        const file = e.dataTransfer.files[0]
+        if (file && file.type.startsWith('image/')) loadFile(file)
+    }
+    function loadFile(file) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            const dataUrl = e.target.result
+            uploadB64 = dataUrl.split(',')[1]
+            const preview = document.getElementById('upload-preview')
+            preview.src = dataUrl
+            preview.style.display = 'block'
+            document.querySelector('#drop-zone .upload-icon').style.display = 'none'
+            document.querySelector('#drop-zone .upload-label').style.display = 'none'
+            document.getElementById('btn-ocr-upload').disabled = false
+            document.getElementById('btn-clear-upload').style.display = ''
+            setStatus(`已加载: ${file.name}`)
+        }
+        reader.readAsDataURL(file)
+    }
+    function clearUpload() {
+        uploadB64 = null
+        document.getElementById('upload-preview').style.display = 'none'
+        document.getElementById('upload-preview').src = ''
+        document.querySelector('#drop-zone .upload-icon').style.display = ''
+        document.querySelector('#drop-zone .upload-label').style.display = ''
+        document.getElementById('btn-ocr-upload').disabled = true
+        document.getElementById('btn-clear-upload').style.display = 'none'
+        document.getElementById('file-input').value = ''
+        setStatus('就绪')
+    }
+    function ocrUpload() {
+        if (!uploadB64) return
+        sendToOcr(uploadB64)
+    }
+
+    // ── OCR ──────────────────────────────────────────────────────
+    async function sendToOcr(b64) {
+        showProcessing('正在识别运单...')
+        try {
+            const result = await window.maque.processOcrImage(b64)
+            if (result.ok) {
+                setStatus('识别完成，正在跳转...')
+            } else {
+                hideProcessing()
+                setStatus('识别失败: ' + (result.error || '未知错误'))
+                alert('识别失败: ' + (result.error || '未知错误'))
+            }
+        } catch (e) {
+            hideProcessing()
+            setStatus('错误: ' + e.message)
+        }
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────
+    function showProcessing(label) {
+        document.getElementById('processing-label').textContent = label
+        document.getElementById('processing').classList.add('show')
+        document.getElementById('btn-capture').disabled = true
+        document.getElementById('btn-ocr-upload').disabled = true
+    }
+    function hideProcessing() {
+        document.getElementById('processing').classList.remove('show')
+        document.getElementById('btn-capture').disabled = false
+        document.getElementById('btn-ocr-upload').disabled = !uploadB64
+    }
+    function setStatus(msg) {
+        document.getElementById('status-bar').textContent = msg
+    }
+
+    // ── Init ──────────────────────────────────────────────────────
+    initCamera()
+
+    // Stop camera tracks when window closes to release hardware
+    window.addEventListener('beforeunload', () => {
+        if (stream) stream.getTracks().forEach(t => t.stop())
+    })
+</script>
+</body>
+</html>
